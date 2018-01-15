@@ -38,3 +38,7 @@ Network structure
       - Multi-home is the arrangement for a customer ISP to connect to multiple provider ISP for better reliability.
       - Peer is the arrangement between same tier ISPs to directly connect and pass traffic to each others network for free.
       - IXP (Internet Exchange Point) is a meeting point where multiple ISPs can peer together.
+
+Delays in the Network
+> Nodal delay = Processing delay + Queuing delay + Transmission delay + Propagation delay
+> End-to-end delay = Number of nodes * (Processing + Transmission + Propagation delays)
