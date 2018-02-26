@@ -40,5 +40,32 @@ Network structure
       - IXP (Internet Exchange Point) is a meeting point where multiple ISPs can peer together.
 
 Delays in the Network
-> Nodal delay = Processing delay + Queuing delay + Transmission delay + Propagation delay
+> Nodal delay = Processing delay + Queuing delay + Transmission delay (Length/Rate) + Propagation delay
+> Traffic Intensity affects Queuing delay = (average rate of packet arrival * length of packet) / transmission rate
+> Packet Loss = packets arriving at a full Queue will be dropped
 > End-to-end delay = Number of nodes * (Processing + Transmission + Propagation delays)
+> Bottleneck Link = link between an end to end connection with lowest throughput (transmission rate)
+
+Protocol Layering
+- a layered architecture provides modularity, ease implementation of services provided by a layer
+- the service model of a layer performs action in a layer to provide service and taps on the service of layers below
+- OSI 7 layer is legacy
+- each lower layer encapsulate the information from a higher layer as a *payload* and appends additional information to the packet header
+
+> Application Layer: sends *messages* to applications distributed across end systems
+> Transport Layer: transports *segments* between application endpoints (connection service)
+> Network Layer: move *dataagrams* between hosts (has routing and addressing service)
+> Link Layer: transmit *frames* over a link between two network nodes
+> Physical Layer: sends individual *bits* across physical transmission medium
+
+History of Internet
+1. 1961-1972: Development of packet switching (ARPAnet)
+2. 1972-1980: Proprietary Networks and Internetworking
+3. 1980-1990: Proliferation of Networks (TCP/IP)
+4. 1990: Internet Explosion (World Wide Web)
+5. The New Millennium: Broadband, high-speed wireless, Social networks, Content Provider ISP, Cloud computing
+
+
+### 2. Application Layer
+___
+(to be continued)
