@@ -118,4 +118,25 @@ HTTP Message Format (Pls Google for more details)
 - Request message methods: GET, POST, HEAD, PUT, DELETE.
 - Response message status: 200 OK, 400 Bad Request, 404 Not Found, 500 Internal Server Error etc.
 
-(to be continued 135)
+Cookies -  mechanism to allow servers to identify users connecting and save user state information.
+1. Client: make HTTP request to Server.
+2. Server: creates ID for user, store (user ID:state info) into backend DB, send HTTP response with "set-cookie: ID" header line.
+3. Client: stores ID in cookie file. Interact with website.
+4. Server: saves user state changes in DB, with user ID as key.
+5. Client: visits the same site in future, sends HTTP request with user ID attached (retrieve from cookie file).
+6. Server: retrieves user state based on ID, restore user session.
+7. Client: continue browsing from previous saved state.
+
+Web Cache - also known as Proxy Server, keeps copies of recently requested web objects from the network and serves subsequent requests on behalf of the original web server. *Content Distribution Networks (CDN)* provides web caches as a service for websites to distribute contents by geographically localising traffic. Web caches use the *Conditional GET* HTTP requests to fetch updated web objects from the original server *If-Modified-Since* a certain date.
+- improves response time for a client request
+- reduce load on bandwidth bottleneck
+- reduce overall web traffic of the network
+
+#### App-layer Protocol - FTP (File Transfer Protocol)
+Protocol to allow user to transfer files to or from a remote host.
+- Runs on two parallel TCP connection, control connection and data connection.(control information sent *out-of-band* from data transmission).
+- Client authenticates and change remote directory through control connection.
+- Server maintains user state information. Sends file over data connection and closes it.
+- Control connection is persistent for a user session. Data connection opens and closes for each individual file transfer. Helps to limit number of concurrent connections to reduce server load.
+
+(continue 146)
