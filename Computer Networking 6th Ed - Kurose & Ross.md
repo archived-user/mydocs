@@ -134,9 +134,87 @@ Web Cache - also known as Proxy Server, keeps copies of recently requested web o
 
 #### App-layer Protocol - FTP (File Transfer Protocol)
 Protocol to allow user to transfer files to or from a remote host.
-- Runs on two parallel TCP connection, control connection and data connection.(control information sent *out-of-band* from data transmission).
+- Runs on two parallel TCP connection, control connection and data connection.(control information sent *out-of-band* from data transmission. Note, HTTP and SMTP works in-band).
 - Client authenticates and change remote directory through control connection.
 - Server maintains user state information. Sends file over data connection and closes it.
 - Control connection is persistent for a user session. Data connection opens and closes for each individual file transfer. Helps to limit number of concurrent connections to reduce server load.
 
-(continue 146)
+#### App-layer Protocol - SMTP (Simple Mail Transfer Protocol)
+Protocol to allow asynchronous communication between people. Messages include attachments, hyperlinks, HTML-formatted text and embedded photos. General flow of email exchange using SMTP:
+1. User Agent: end user software, uses SMTP to push messages to sender's Mail Server.
+2. sender's Mail Server: stores message in message queue. Opens TCP connection to receiver's Mail Server. Performs SMTP handshake and sends message that is in queue. (if mail bounces, sender's Mail Server will keep re-attempting for a limited time).
+3. receiver's Mail Server: receives message. Stores into designated user mailbox.
+4. receiver: retrieves message using some form of *Mail Access Protocol*.
+
+SMTP Characteristics - it is a push protocol. Sender's Mail Server initiates TCP connection and pushes message to receiver's Mail Server. (Unlike HTTP, which is a pull protocol where client initiates TCP connection to download information from web servers).
+- it is limited to use 7-bit ASCII format to encode the body of each message.
+- it places all content objects into one message (whereas HTTP encapsulates each object in its own HTTP response message).
+
+Mail Access Protocols - used to pull messages from mailbox in a Mail Server to a receiver's User Agent or local PC.
+
+1. Post Office Protocol Version 3 (POP3): User Agent establish TCP connection to Mail Server. Goes through the following phases:
+- Authorisation, authenticate user based on credentials entered.
+- Transaction, User Agent retrieves messages and allows user to mark out or unmark messages for deletion and obtain mail statistics.
+- Update, Mail Server deletes marked messages.
+- POP3 does not store user state and requires explicit deletion of messages, simplifying POP3 server implementation.
+- POP3 has 2 modes, download-and-delete, which removes the message from Mail Server once a copy is saved by the User Agent on the local PC.
+- download-and-keep, which does not remove the message even after reading.
+
+2. Internet Mail Access Protocol (IMAP): extends POP3 with more features (but makes both server and client implementation more complex).
+- Each message in the IMAP server is associated with a folder (all incoming messages are associated with INBOX by default).
+- User may create folders and move messages across user-created folders.
+- User may also search for messages matching specific criteria.
+- IMAP maintains user state information (names of folders and message association).
+- IMAP permit a User Agent to only retrieve the header of a message or just one part of a multipart MIME message. Useful for low-bandwidth connection to avoid downloading long or huge messages.
+
+3. HTTP: web based access to email service.
+- Web browser is the User Agent, communicates with remote mailbox via HTTP.
+- Messages are retrieved from mailbox to display on browser using HTTP as well.
+- Messages are also sent from browser to sender's mail server using HTTP.
+- (but communication between sender's and receiver's mail servers is still via SMTP).
+
+#### App-layer Protocol - DNS (Domain Name System)
+This protocol enables the directory service of the internet, mapping hostnames to IP addresses.
+- The DNS is a distributed DB implemented in a hierarchy of DNS servers.
+- The protocol allows hosts to query the distributed DB to obtain IP addresses.
+- It is commonly used by other app-layer protocols. E.g. HTTP:
+  1. Browser extracts hostname from URL in HTTP request, passes to DNS client.
+  2. DNS client sends query containing hostname to DNS server.
+  3. DNS server responds with IP address that maps to hostname.
+  4. DNS client passes IP address to Browser, which initiates TCP connection to server at IP address, and starts HTTP message exchange.
+- DNS provides *Host Aliasing*: a host can have a canonical hostname that maps to the IP address, and other alias names that maps to the canonical hostname.
+- DNS provides *Mail Server Aliasing*: mail servers of an organisation can have the same hostname as their web or app servers, as long as it is registered as an MX record.
+- DNS provides *Load Distribution*: multiple replicated web servers can be mapped to one canonical hostname. DNS DB will return a set of IP addresses to the clients but rotates the ordering of the addresses within each reply. The clients typically sends HTTP request to the first IP address in the list, hence DNS rotation helps distribute traffic.
+
+DNS Design and Characteristics:
+- Uses UDP to send DNS query and responses.
+- Prevents single point of failure, high traffic volume, distant centralised DB and maintenance issues by using a distributed, hierarchical DB:
+  - Root DNS servers: there are 13 replicated servers acting like a single server for security and reliability purpose. provides mapping of Top-Level Domain (TLD) servers.
+  - TLD servers: these servers are responsible for the mapping of authoritative DNS servers for organisations using the top-level domains (e.g. com, org, net, edu, gov).
+  - Authoritative DNS servers: these servers are typically owned by organisation to provide mapping of IP addresses to the hostnames of their web servers or mail servers.
+  - Local DNS servers: not part of the hierarchy of DNS servers. Typically provided by ISPs or organisation's network. These servers act as a proxy to forward query to DNS server hierarchy.
+    - Recursive Queries: query requests that expects the next server in the hierarchy to obtain the IP address mapping on requester's behalf, and this request is recursively passed from server to server.
+    - Iterative Queries: query requester obtains DNS record of the next server in the hierarchy to direct the query, requester iteratively query each relevant server until a desired mapping is obtained.
+    - a DNS client typically performs a recursive query to local DNS server, which then performs iterative query to the DNS hierarchy.
+  - Local DNS servers also caches DNS records to improve DNS performance and reduce DNS traffic.
+
+DNS Records:
+A resource record (RR) is a four-tuple containing (Name, Value, Type, TTL).
+- For Type A record, Name = hostname, Value = IP address.
+- For Type NS record, Name = domain, Value = hostname of authoritative DNS server.
+- For Type CNAME record, Name = alias hostname, Value = canonical hostname.
+- For Type MX record, Name = alias hostname, Value = canonical hostname of mail server.
+
+DNS Message Format (Pls Google for more details)
+- ID, Flags, # Qns, # Answer RR, # authority RR, # additional RR.
+- Questions, Answers, Authority, Additional Information.
+
+Inserting Records into DNS DB:
+1. Register a domain name at a registrar (a commercial entity that verifies the uniqueness of domain name and enters domain name into DNS DB).
+2. Provide hostnames and IP addresses of Primary and Secondary Authoritative DNS servers (the Registrar will enter the NS and A records for these 2 servers into the TLD Servers).
+3. Ensure Type A record and MX record of the desired hosts are entered into the Authoritative DNS servers.
+
+#### App-layer Protocol - Peer-to-Peer Applications
+#### P2P File Distribution
+
+(continue at 172)
