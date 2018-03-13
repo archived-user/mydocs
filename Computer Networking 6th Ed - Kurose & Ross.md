@@ -150,28 +150,28 @@ SMTP Characteristics - it is a push protocol. Sender's Mail Server initiates TCP
 - it is limited to use 7-bit ASCII format to encode the body of each message.
 - it places all content objects into one message (whereas HTTP encapsulates each object in its own HTTP response message).
 
-Mail Access Protocols - used to pull messages from mailbox in a Mail Server to a receiver's User Agent or local PC.
-
+#### App-layer Protocol - Mail Access Protocols
+Used to pull messages from mailbox in a Mail Server to a receiver's User Agent or local PC.
 1. Post Office Protocol Version 3 (POP3): User Agent establish TCP connection to Mail Server. Goes through the following phases:
-- Authorisation, authenticate user based on credentials entered.
-- Transaction, User Agent retrieves messages and allows user to mark out or unmark messages for deletion and obtain mail statistics.
-- Update, Mail Server deletes marked messages.
-- POP3 does not store user state and requires explicit deletion of messages, simplifying POP3 server implementation.
-- POP3 has 2 modes, download-and-delete, which removes the message from Mail Server once a copy is saved by the User Agent on the local PC.
-- download-and-keep, which does not remove the message even after reading.
+  - Authorisation, authenticate user based on credentials entered.
+  - Transaction, User Agent retrieves messages and allows user to mark out or unmark messages for deletion and obtain mail statistics.
+  - Update, Mail Server deletes marked messages.
+  - POP3 does not store user state and requires explicit deletion of messages, simplifying POP3 server implementation.
+  - POP3 has 2 modes, download-and-delete, which removes the message from Mail Server once a copy is saved by the User Agent on the local PC.
+  - download-and-keep, which does not remove the message even after reading.
 
 2. Internet Mail Access Protocol (IMAP): extends POP3 with more features (but makes both server and client implementation more complex).
-- Each message in the IMAP server is associated with a folder (all incoming messages are associated with INBOX by default).
-- User may create folders and move messages across user-created folders.
-- User may also search for messages matching specific criteria.
-- IMAP maintains user state information (names of folders and message association).
-- IMAP permit a User Agent to only retrieve the header of a message or just one part of a multipart MIME message. Useful for low-bandwidth connection to avoid downloading long or huge messages.
+  - Each message in the IMAP server is associated with a folder (all incoming messages are associated with INBOX by default).
+  - User may create folders and move messages across user-created folders.
+  - User may also search for messages matching specific criteria.
+  - IMAP maintains user state information (names of folders and message association).
+  - IMAP permit a User Agent to only retrieve the header of a message or just one part of a multipart MIME message. Useful for low-bandwidth connection to avoid downloading long or huge messages.
 
 3. HTTP: web based access to email service.
-- Web browser is the User Agent, communicates with remote mailbox via HTTP.
-- Messages are retrieved from mailbox to display on browser using HTTP as well.
-- Messages are also sent from browser to sender's mail server using HTTP.
-- (but communication between sender's and receiver's mail servers is still via SMTP).
+  - Web browser is the User Agent, communicates with remote mailbox via HTTP.
+  - Messages are retrieved from mailbox to display on browser using HTTP as well.
+  - Messages are also sent from browser to sender's mail server using HTTP.
+  - (but communication between sender's and receiver's mail servers is still via SMTP).
 
 #### App-layer Protocol - DNS (Domain Name System)
 This protocol enables the directory service of the internet, mapping hostnames to IP addresses.
@@ -215,6 +215,46 @@ Inserting Records into DNS DB:
 3. Ensure Type A record and MX record of the desired hosts are entered into the Authoritative DNS servers.
 
 #### App-layer Protocol - Peer-to-Peer Applications
-#### P2P File Distribution
+P2P File Distribution - Each peer can redistribute any portion of the file it has received to any other peers, assisting the server in the distribution process. Upload capacity of a centralised file sharing server is limited by the uplink of the file server. In a P2P architecture, upload capacity is determined by uplink of file server and each peers that are redistributing the file.
 
-(continue at 172)
+#### BitTorrent
+A popular P2P protocol for file sharing.
+A Torrent = the collection of all peers participating in the distribution of a particular file.
+A Tracker = an infrastructure node in each torrent that tracks the peers participating in the torrent. New peers register with the Tracker and provide periodic update of its participation status.
+
+How BitTorrent Works:
+- A peer joins the torrent. Obtains a list of neighbouring peers from Tracker.
+- Peer establish TCP connections with neighbouring peers and obtain a list of all chunks of file held by each neighbour.
+- Peer takes *rarest first* approach and request for the rarest chunks of file among all neighbours (This helps the torrent to ensure that rarest chunks are quickly redistributed).
+- Peer redistributes chunks to a selective subset of neighbours (trading partners) giving priority to those that have been supplying the peer with the highest rate (reciprocating behaviour). These subset of neighbours are considered *unchoked*.
+- A randomly chosen neighbour will be *optimistically unchoked* every 30 seconds, if the neighbour is able to supply data at high rate it will be able to replace an existing trading partner (This ensures that peers with compatible uploading rates will eventually find each other to partner, and even peers with no chunks will be able to obtain some data due to the randomness and be able to start trading).
+
+#### Distributed Hash Table (DHT)
+Each peer in the P2PDHT will hold a small subset of (key, value) pairs. Any peers can query the DHT with a particular key to locate the value. Any peers can also insert new key-value pairs into the DHT.
+
+How DHT Works:
+- Each key in the DB is an N-bit integer (A hash function is used to generate the keys from relevant identifying data)
+- Each peer in the system is also assigned an N-bit identifier. 
+- Peers with identifier that is the *closest successor* to the keys will be storing those subset of key-value pairs.
+- Circular DHT: 
+  - each peer keeps track of the address of its immediate predecessor peer (next smallest peer ID) and its immediate successor peer (next bigger peer ID). (Peers sequence wraps around once the max value of N-bit identifier is reached).
+  - When a peer wants to query the DHT for the value of a key, it will pass the query either to the predecessor or to the successor peer.
+  - Each peer that receives the query will pass it on to the next, until one of the peer is able to answer the query with the desired value. (In other words the peers form an *overlay network*, a logical, circular arrangement, on top of the physical network).
+  - Circular DHT reduce the amount of overlay information (about address of other peers etc.) that needs to be maintained, but in the worst case query scenario, all peers will need to be queried, which is not efficient.
+- Circular DHT with Shortcuts:
+  - Peers not only tracks the immediate predecessor and successor, but also a few other peers spread out across the circular overlay network (the shortcut neighbours).
+  - Shortcuts reduce the number of peers a query has to travel in the worst case scenario.
+- Peer Churn:
+  - To handle peers leaving the system abruptly, each peers track their two immediate predecessors and two immediate successors.
+  - Peers periodically ping and verify that their neighbours are alive.
+  - If a peer leaves the network, its immediate predecessor and successor will detect this and communicate with each other to recognise that there is a gap and close it. This information is propagated to the next preceding and succeeding peer.
+  - Similarly when a peer wants to join the network, this request and the new peer identifier is sents into the network. The closest successor to the new peer will inform the new peer all the required peer tracking information of the neighbours. With that, the new peer will announce its entry to the network to its predecessor.
+*BitTorrent uses the Kademlia DHT to create a distributed tracker to map torrent identifiers (key) to all IP addresses of peers in the torrent (values).
+
+&nbsp;
+
+### 3. Transport Layer
+___
+#### Overview and Key Services of Transport Layer
+
+(continue 212)
