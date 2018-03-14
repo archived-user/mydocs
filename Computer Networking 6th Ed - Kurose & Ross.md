@@ -187,7 +187,7 @@ This protocol enables the directory service of the internet, mapping hostnames t
 - DNS provides *Load Distribution*: multiple replicated web servers can be mapped to one canonical hostname. DNS DB will return a set of IP addresses to the clients but rotates the ordering of the addresses within each reply. The clients typically sends HTTP request to the first IP address in the list, hence DNS rotation helps distribute traffic.
 
 DNS Design and Characteristics:
-- Uses UDP to send DNS query and responses.
+- Uses **UDP** to send DNS query and responses.
 - Prevents single point of failure, high traffic volume, distant centralised DB and maintenance issues by using a distributed, hierarchical DB:
   - Root DNS servers: there are 13 replicated servers acting like a single server for security and reliability purpose. provides mapping of Top-Level Domain (TLD) servers.
   - TLD servers: these servers are responsible for the mapping of authoritative DNS servers for organisations using the top-level domains (e.g. com, org, net, edu, gov).
@@ -256,5 +256,63 @@ How DHT Works:
 ### 3. Transport Layer
 ___
 #### Overview and Key Services of Transport Layer
+- User Datagram Protocol (UDP): provides unreliable, connectionless service with transport layer multiplexing and demultiplexing.
+- Transmission Control Protocol (TCP): provides multiplexing and demultiplexing, reliable data transfer, congestion control, connection-oriented service.
+- Challenges for Transport Layer protocol design comes from the fact that it runs on top of an unreliable IP Network Layer that delivers data at best effort.
 
-(continue 212)
+#### What is Multiplexing and Demultiplexing?
+- Multiple processes operating on one same host (same IP address) may need to communicate with the network.
+- All processes pass segments to the same Transport layer to deliver data to the network (Multiplexing).
+- All segments designated to the host comes in from the IP layer and is filtered to the correct designated processes by the Transport layer (Demultiplexing).
+- Transport layer identifies the process to pass segments correctly via sockets.
+- Sockets are uniquely identified by a two-tuple (dest_IP_addr, dest_port) for UDP and a four-tuple (src_IP_addr, src_port, dest_IP_addr, dest_port) for TCP.
+- As TCP sockets uses both source and destination information for identification, it is able to maintain connection between 2 communicating processes. For UDP, segments from all sources designated for the same receiving process will be passed to the same designating socket.
+- All segments communicated will contain information of the communicating sockets.
+- Application layer of the process retrieves the data encapsulated by the segment from the socket.
+
+#### TCP and Web Server
+- Web server using HTTP commonly listens on TCP port 80 or port 443 for incoming client connections.
+- In multithreaded servers, process will pass the task to a thread after a TCP connection has been established.
+- The thread will inherit the socket used to communicate with the client.
+- All threads will be using a unique socket even when the main server process is listening on a single port 80 or 443 (due to 4-tuple socket).
+- If the same client wants to make multiple connection to the server, it must use a different source port number.
+
+#### Connectionless Transport: UDP
+Advantages of using a lightweight, connectionless UDP for applications (such as DNS):
+- *Finer application-level control over what data is sent and when to send*: Good for real-time application that wants to minimise transmission delay but can afford some data loss.
+- *No connection establishment*: making application much faster without connection overheads.
+- *No connection state*: application uses less resource as it does not need to track buffers, congestion control parameters, sequence numbers and acknowledgements etc. The same app server can serve more active clients as compared to TCP.
+- *Small packet header overhead*: faster processing and communication.
+
+UDP is used by routing table updates (RIP), network management (SNMP) and DNS as these protocols provide services that do not require the maintenance of communication state. An application can still have reliable data transfer and all other Transport layer features while using UDP as long as those logic are implemented at the application layer.
+
+UDP Segment Structure (Pls Google for more details)
+- src_port, dest_port, length (of header plus data).
+- checksum (one's complement of sum of all 16-bit words in the segment. used to detect bitwise errors).
+- checksum allows UDP to provide *end-to-end principle* in system design (providing error detection without depending on reliability of lower layers of the network).
+- application data.
+- UDP however do not have error correction. It is up to the application to program the logic of error handling.
+
+(Concepts to cover for reliable data transfer)
+- checksum for error detection
+- receiver feedback via ACK or NACK to indicate error
+- retransmission by sender for error correction, or for data transmission loss
+- sequence number for each segments to allow receiver to identify retransmissions duplicates (duplicates will still be ACK as it may be the result of ACK lost in transmission. But the duplicates will not be passed to application layer).
+- sequence number for ACK segments to allow sender to identify duplicated ACKs
+- sender has countdown timer to retransmit segment if no ACK is received by the time expire
+- pipelining, instead of stop-and-wait protocol, allows sender to transmit a number of segments before receiving any ACKs to better utilise the network link capacity and increase data throughput.
+- senders and receivers need to buffer segments in order to implement pipelining.
+- pipelined error recovery takes 2 approaches
+  - **Go-Back-N (GBN) protocol**, a sliding-window protocol that allows sender to at any time send up to a window size of N segments without waiting for ACKs.
+  - When ACK for a sent segment has reached sender, window slides forward to start from that acknowledged segment and new segments are sent. (This protocol uses cumulative acknowledgement, meaning once an ACK for a particular segment is received, the sender can expect that all preceding segments have reached the receiver correctly)
+  - If a time out occur, all unacknowledged segments in the window are retransmitted (go-back-N). Timer restarts once an ACK is received but there are still unacknowledged segments in the window. Timer stops if there are no more unacknowledged segments.
+  - **Selective Repeat (SR)**, unlike GBN, uses *individual* acknowledgement for each segments.
+  - Sliding window of size N is still used to limit the sending and buffer the receiving of segments.
+  - Segments are tracked individually.
+  - Segments arriving out of order will still be ACK. Sender only retransmit particular segments that are lost or corrupted.
+  - The sliding window must be less than or equal to half of the size of sequence number space to avoid collision and confustion of sequence number for two unique segments (e.g. the start and end of the sliding window which is wrapping around the sequence number space),
+- Sequence numbers are not reused (for approximately 3 minutes, which is a maximum packet lifetime in the network) to ensure no segments that are still alive in the network from a previously closed connection can still propagate in the network and disrupt the current connection.
+
+#### Connection-Oriented Transport: TCP
+
+(continue at 257)
