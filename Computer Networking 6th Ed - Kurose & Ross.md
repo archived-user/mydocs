@@ -293,7 +293,7 @@ UDP Segment Structure (Pls Google for more details)
 - application data.
 - UDP however do not have error correction. It is up to the application to program the logic of error handling.
 
-(Concepts to cover for reliable data transfer)
+#### (Concepts that help to build reliable data transfer)
 - checksum for error detection
 - receiver feedback via ACK or NACK to indicate error
 - retransmission by sender for error correction, or for data transmission loss
@@ -302,7 +302,7 @@ UDP Segment Structure (Pls Google for more details)
 - sender has countdown timer to retransmit segment if no ACK is received by the time expire
 - pipelining, instead of stop-and-wait protocol, allows sender to transmit a number of segments before receiving any ACKs to better utilise the network link capacity and increase data throughput.
 - senders and receivers need to buffer segments in order to implement pipelining.
-- pipelined error recovery takes 2 approaches
+- pipelined error recovery takes 2 approaches, both are *Automatic Repeat reQuest (ARQ)* protocol:
   - **Go-Back-N (GBN) protocol**, a sliding-window protocol that allows sender to at any time send up to a window size of N segments without waiting for ACKs.
   - When ACK for a sent segment has reached sender, window slides forward to start from that acknowledged segment and new segments are sent. (This protocol uses cumulative acknowledgement, meaning once an ACK for a particular segment is received, the sender can expect that all preceding segments have reached the receiver correctly)
   - If a time out occur, all unacknowledged segments in the window are retransmitted (go-back-N). Timer restarts once an ACK is received but there are still unacknowledged segments in the window. Timer stops if there are no more unacknowledged segments.
@@ -310,9 +310,156 @@ UDP Segment Structure (Pls Google for more details)
   - Sliding window of size N is still used to limit the sending and buffer the receiving of segments.
   - Segments are tracked individually.
   - Segments arriving out of order will still be ACK. Sender only retransmit particular segments that are lost or corrupted.
-  - The sliding window must be less than or equal to half of the size of sequence number space to avoid collision and confustion of sequence number for two unique segments (e.g. the start and end of the sliding window which is wrapping around the sequence number space),
+  - The sliding window must be less than or equal to half of the size of sequence number space to avoid collision and confustion of sequence number for two unique segments (e.g. the start and end of the sliding window which is wrapping around the sequence number space)
 - Sequence numbers are not reused (for approximately 3 minutes, which is a maximum packet lifetime in the network) to ensure no segments that are still alive in the network from a previously closed connection can still propagate in the network and disrupt the current connection.
 
 #### Connection-Oriented Transport: TCP
+- connection-oriented, full-duplex service (2 way communication) that is always point-to-point (only 1 pair of sender/receiver)
+- connection established via three-way handshake
+- establishes **Maximum Segment Size (MSS)** based on the largest link-layer frame that can be sent by the host a.k.a. Maximum Transmission Unit (MTU) to ensure that the entire TCP segment with header encapsulated in an IP datagram can fit into a single link-layer frame.
 
-(continue at 257)
+TCP Segment Structure (Pls Google for more details)
+- 16-bit src_port, dest_port, 32-bit sequence number, acknowledgement number, header length
+- 1-bit flags (URG, ACK, PSH, RST, SYN, FIN)
+- 16-bit receive window for control flow
+- 16-bit checksum, urgent data pointer to indicate the last byte of urgent data
+- Options field, to negotiate MSS
+- Data field
+
+**Sequence Numbers** are byte stream numbers for the number of bytes in the segment, not segment count.
+**Acknowledgement Numnbers** are sent by receiver is always +1 from the sequence number of the latest segment received.
+**Cumulative Acknowledgement** is used by TCP to only acknowledge bytes up to the first missing byte in the stream.
+
+TCP RFCs do not impose any rules on implementation to handle **out-of-order segments**. Receiver can choose to discard segments or to keep them in buffer and wait for missing bytes to fill the gaps (more efficient).
+
+**Round-Trip Time (RTT)** - each segment sent and corresponding ACK received is used to compute *SampleRTT*.
+> EstimatedRTT = (1 - a) * EstimatedRTT + a * SampleRTT
+
+> a = 0.125 (recommended)
+
+This EstimatedRTT is an exponential weighted moving average (EWMA) with more weight on the latest SampleRTT that is assumed to contain the most updated network delay information.
+
+> DevRTT = (1 - b) * DevRTT + b * |SampleRTT - EstimatedRTT|
+> b = 0.25 (recommended)
+
+This DevRTT measures the variability of RTT.
+
+**Retransmission Timeout Interval** - should be larger than RTT but not too large such that there are unnecessary delays.
+> TimeoutInterval = EstimatedRTT + 4 * DevRTT
+
+**Doubling Timeout Interval** - Whenever a timeout event occurs, TCP retransmit segment and restart countdown timer with double the interval. Therefore retransmission increase timeout interval exponentially. However, whenever the timer is restarted due to receiving of correct ACK, the interval is set according to latest EstimatedRTT.
+
+**Fast Retransmission** - helps TCP recovers from errors before timeout occurs.
+
+| No. | Event | Action |
+| --- | --- | --- |
+| 1. | Segment with expected sequence number arrive. All previous segments already acknowledged. | Delayed ACK. Wait up to 500 msec. |
+| 2. | Segment with expected sequence number arrive. Next in-order segment also arrive. | Immediately send cumulative ACK (represents both segments). |
+| 3. | Segment arrive out-of-order. Gap detected. | Immediately send duplicate ACK, indicating that receiver is expecting lower end of the gap. |
+| 4. | Segment arrive fills / partially fills a gap | Immediately send ACK only if segment fills lower end of gap. |
+
+**GBN and SR hybrid** - TCP sender maintains an N sliding window to achieve pipelining, but will not go-back-N bytes on error. TCP will only send the next expected segment that is detected to be missing by the implicit mechanism. *Selective Acknowledgement* implementations of TCP allows receiver to ACK out-of-order segments.
+
+**Flow Control**
+- Flow control service prevents sender from overflowing receiver's buffer.
+- Congestion control service, on the other hand, prevents congestion within the IP network.
+
+> rwnd = RcvBuffer - (LastByteRcvd - LastByteRead)
+
+- **Receive window (rwnd)**, maintained by receiver, indicates spare capacity in the receiver buffer that can take in new bytes from sender. This variable is sent to the sender.
+
+> rwnd >= LastByteSent - LastByteAcked
+
+- Sender keeps track of 2 variables, last byte sent and acked, and compares with the receive window to make sure total segments sent into the network will not overflow receiver's buffer.
+- To prevent a scenario when receiver buffer is full (rwnd = 0) yet all the segments had been ACKed, which will cause the sender to lose communication with the receiver even when the buffer clears, TCP requires sender to keep sending one byte of data even if rwnd = 0.
+
+**Connection Management**
+- TCP **three-way handshake** starts with client-side sending a request segment with SYN flag and initial client_seq_no.
+- Server respond with connection-granted segment with SYN ACK flags and initial server_seq_no, and put client_seq_no+1 into acknowledgement number field.
+- Client completes handshake by responding with a segment with ACK flag, and acknowledgement number = server_seq_no+1.
+- The final ACK segment may be piggybacked with application data in the payload.
+- TCP **closes connection** by the client sending special segment with FIN flag.
+- Server will ACK the special segment from client.
+- Server will send its own shutdown segment with FIN flag.
+- Client will ACK, and subsequently both hosts will deallocate all resources used for this connection.
+- After Client receive shutdown segment from Server, it will have a waiting interval to resend ACK in case the ACK was lost. But the connection will formally close regardless of the server after a timeout (typically 30 secs to 2 mins).
+
+**SYN Flood Attack and SYN Cookies**
+- As TCP Server allocates resources for the connection variables and buffer once it receives the SYN request from a client, a flood of SYN request can cause a Denial of Service (DoS), if a botnet of clients keep sending SYN request to a Server without ever completing the handshake with a final ACK.
+- To mitigate this, a SYN cookie can be used, instead of allocating resources to track the handshake state with the client.
+- SYN cookie is the initial server_seq_no, derived by hashing the data (src_IP_addr,dest_IP_addr,src_port,dest_port) from the client SYN segment.
+- Server will respond to the handshake with a SYN ACK and use SYN cookie.
+- When Client ACK to complete the handshake, Server will check if the client is legitimate by performing the hash calculation to derive  the same SYN cookie from the segment information.
+- Once validated, Server will allocate resources for this connection.
+
+**TCP Reset Segment** - the RST flag is used in segment from receiver to inform the sender that the receiver is not running any application on that dest_port that can establish the requested connection.
+
+**Congestion Control**
+Congestion can occur for a TCP connection due to bottleneck links and finite buffers on intermediary routers.
+- Congestion causes large queuing delay.
+- Congestion results in retransmission of segments due to packets dropped at overflowing buffer or due to timeout.
+- Congestion results in wastage of network link capacity to continually retransmit segments that had already been received but which ACK had not reach the sender.
+- Congestion results in wastage of upstream network link resources used to transmit a packet all the way up to the point it was dropped due to overflowing buffer.
+
+**Network-Assisted Congestion-Control Example: ATM ABR**
+ATM refers to *Asynchronous Transfer Mode* and ABR refers to *Available Bit-Rate*.
+- ATM takes a virtual-circuit (VC) oriented approach towards packet switching.
+- A switch can track the transmission rate of senders and various VC state information.
+- Switches can then inform the senders to take congestion control actions.
+- Switches intersperse the data cells that they are transporting between senders and receivers with resource-management (RM) cells.
+- RM cells can be modified by downstream switches.
+- RM cells will reach the receiver and be redirected to the sender to adjust sending rate.
+- RM cells can indicate presence of congestion, severity of congestion (none/mild/servere), and explicit minimum transmission rate supported by this VC of switches.
+- With such feedbacks from the network, senders can take advantage of uncongested network to increase transmission rate, and also mitigate congestion.
+
+**End-to-end Congestion-Control of TCP**
+The TCP sender keeps track of a **congestion window (cwnd)** variable to constrain the sending rate.
+> min{cwnd, rwnd} >= LastByteSent - LastByteAcked
+
+- A lost segment implies congestion, hence TCP sender's rate should be decreased.
+- An acknowledged segment indicates that the network is delivering the sender's segments to receiver, hence sender's rate can be increased.
+- Bandwidth probing to keep adjusting sender's rate in response to arriving ACKs until a loss even occurs, then decrease the rate and re-adjust to find the optimal rate.
+
+**TCP Congestion-Control Algorithm**
+- **Slow Start Mode**: sender cwnd starts at 1 MSS (so sender's rate is approximately cwnd/RTT bytes/sec), and doubles for every successful ACK received.
+- As a result, sending rate doubles every RTT and grows exponentially.
+- If a loss event occur from timeout, set a new variable **slow start threshold (ssthresh)** = cwnd/2, half of the congestion window value that caused packet loss, and set the new cwnd to 1 MSS. Sender begins Slow Start process again.
+- If cwnd reaches ssthresh level, TCP transitions to Congestion Avoidance mode.
+- If three duplicate ACKs are detected, problem is less drastic, sender adjust the variable ssthresh = cwnd/2, then adjust cwnd = ssthresh + 3 MSS, to account for the 3 ACKs, then finally performs fast retransmission and enters Fast Recovery mode.
+- **Congestion Avoidance mode**: sender cwnd increase by only 1 MSS for each successful ACK received.
+- If a loss event occur from timeout, adjust the variable ssthresh = cwnd/2, and reset the new cwnd to 1 MSS.
+- If three duplicate ACKs are detected, adjust the variable ssthresh = cwnd/2, then adjust cwnd = ssthresh + 3 MSS, then enter Fast Recovery state.
+- **Fast Recovery mode**: value of cwnd increase by 1 MSS for every duplicate ACK received.
+- Therefore while duplicated ACKs comes in, sender is still allowed to send new segments.
+- When the missing segment is finally ACKed, the cwnd (which started growing at ssthresh + 3) is reset to cwnd = ssthresh, and sender returns to Congestion Avoidance mode.
+- If a timeout occurs while in Fast Recovery, adjust ssthresh = cwnd/2, adjust cwnd = 1, and sender enters Slow Start state.
+
+TCP Congestion Control is often reffered to as **Additive-Increase, Multiplicative-Decrease (AIMD)** form of control.
+- The congestion window size (approximately sender's rate) forms a "saw tooth" graph over time.
+- TCP's AIMD algorithm serves as a *distributed asynchronous-optimisation algorithm* that simultaneously optimise several aspects of user and network performance.
+- Due to the "saw tooth" behaviour, average throughput of TCP connection is approximately = (3/4 * cwnd)/RTT
+
+**Steady State Dynamics of TCP**
+Given the congestion control behaviour of TCP, we may derived the average throughput. If an application requires high bandwidth reliable transmission at a certain minimum rate, we can derive the tolerable loss rate to achieve this using the throughput formula, or the cwnd required to achieve this.
+
+**Fairness**
+- Multiple TCP senders sending through the same bottleneck link will eventually reach a steady equilibrium state where each have an equal share of link capacity, after applying a few rounds of the AIMD algorithm.
+- Intuitively, this is due to the fact that sender with a larger capacity share will decrease their congestion window by a larger amount for every cycle of AIMD, than senders who have a small capacity share and hence have small congestion window to start with.
+- Eventually, senders with smaller congestion window size will "catch up" and equalise with the rest of the senders.
+- But in practice, other factors can also disturb the fairness, such as connections with smaller RTT will tend to get a larger share of bottleneck link capacity, and pairs of senders and receivers may set up multiple parallel connection to get a larger capacity.
+- And also, UDP is not fair by nature and can potentially crowd out TCP traffic.
+
+**TCP Splitting Optimisation**
+- A technique used to mitigate slow performance caused by TCP Slow Start by maintaining very large congestion window and better RTT to overcome congestion control.
+- Commonly used by CDNs.
+- Instead of having clients connect directly to web servers, they connect to CDN servers that are located nearer to the clients (lower RTT).
+- CDN servers perform TCP Splitting, by maintaining a unique connection with the client, and another persistent connection with the data center that holds the web server.
+- This persistent connection is able to maintain large TCP congestion window and better RTT performance due to better network infrastructure.
+- Client will get to enjoy much better performance when communicating with a web server that is far away (sort of like a divide-and-conquer approach for the transport of data).
+
+&nbsp;
+
+### 4. Network Layer
+___
+#### TBC
+(continue 332)
