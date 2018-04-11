@@ -461,5 +461,29 @@ Given the congestion control behaviour of TCP, we may derived the average throug
 
 ### 4. Network Layer
 ___
-#### TBC
-(continue 332)
+#### Role of Network Layer
+Role of the Network Layer is simply to move packets from a sending host to a receiving host. 3 main functions to achieve this:
+1. Forwarding - Moving a packet from input link of router to the appropriate output link.
+2. Routing - Routing Algorithms of network layer to determine the route / path taken by packets as they travel between sender and receiver.
+3. Connection Setup - Routers along a chosen path from source to destination must connect with each other and set up states before packets can begin to flow.
+
+**Network Service Model**
+- Internet's network provides only best-effort service: no bandwidth guarantee, no loss guarantee, any ordering of packets, no timing guarantee, no congestion indicator.
+- Alternative network architectures, such as ATM, provides Constant Bit Rate or Available Bit Rate indicators.
+
+#### Virtual Circuit (VC) and Datagram Networks
+
+**VC Networks**
+- Connection service. Unlike Transport Layer, which connection is only established between hosts, VC connection is implemented on all routers along a path.
+- A VC consists of a path between source and destination, a VC number for each link along the path, and forwarding table in each router.
+- There are 3 phases in a VC:
+  - VC Setup: Network Layer is informed of destination address by Transport Layer, determine path, determine VC number of each link, add entries in router forwarding tables. (sent via Signaling Messages).
+  - Data Transfer: When a VC packet arrive, router will match the incoming interface and VC number to outgoing interface and VC number, *replace VC number in the packet* and forward it appropriately. (reduced complexity by not using network-wide unique VC number).
+  - VC Teardown: Network Layer is informed of desire to terminate VC, inform both end systems, remove VC entries from router forwarding tables.
+
+**Datagram Networks**
+- Connectionless service. No set up of connection, routers do not need to maintain state information.
+- Packets are stamped with destination address. Routers match destination address in forwarding table and pass packets to appropriate output interface.
+- Addresses are matched to entries in the table using **longest prefix matching rule**.
+- Routing Algorithms update forwarding tables (approximately one-to-five minute)
+- As forwarding tables update, packets transmitted between two hosts may travel different paths.
